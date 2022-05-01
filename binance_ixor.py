@@ -140,9 +140,6 @@ class Wallet:
             self.list_wallet_coins[coin] = {
                 'amount': 0.,
                 'last_price': 0.,
-                'last_time': 0,
-                'last_pattern': 0.,
-                'last_good_candle': Candle(),
                 'filters': {}
             }
 
@@ -154,9 +151,6 @@ class Wallet:
                 'name': coin,
                 'amount': coin_in_wallet.get('amount'),
                 'last_price': coin_in_wallet.get('last_price'),
-                'last_time': coin_in_wallet.get('last_time'),
-                'last_pattern': coin_in_wallet.get('last_pattern'),
-                'last_good_candle': coin_in_wallet.get('last_good_candle'),
                 'filters': coin_in_wallet.get('filters')
             }
         return coin_info
@@ -209,140 +203,32 @@ def sell_coin(spot, client, wallet, coin, new_candle_end, coef=0.):
         # print(f"не получилось продать {coin} 101")
         return 101
 
-    # try:
-    #    spot.new_order(f"{coin}{wallet.main_coin.get('name')}", "SELL", "MARKET", quantity=amount_sell_coin)
-    # except:
-    #    print(f"не получилось продать {coin} 102")
-    #    return 102
-
-    # wallet.set_coin_value(spot, client, coin)
-    # wallet.set_main_coin_value(client)
-
     wallet.list_wallet_coins.get(coin)['amount'] -= amount_sell_coin
     wallet.main_coin['amount'] += amount_sell_coin * new_candle_end * 0.999
 
     return 1
 
-    # last_trade = spot.my_trades(f"{coin}{wallet.main_coin.get('name')}", limit=1)[0]
-    # print(f"продал {coin} - {amount_sell_coin}")
-    # print(f"{last_trade}\n")
-
-
-def analyze_sell0(spot, client, wallet, coin, new_candles_combo, coef=0.5):
-    last_candle_index = len(new_candles_combo) - 1
-    last_candle = new_candles_combo[last_candle_index]
-
-    if (last_candle.end > wallet.wallet_get_coin(coin).get('last_price') * 1.02) | \
-            (last_candle.end < wallet.wallet_get_coin(coin).get('last_price') * 0.98) | \
-            (last_candle.tbq < 10):
-        return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-    return 0
-
-
-def analyze_sell1(spot, client, wallet, coin, new_candles_combo, coef=0.5):
-    last_candle_index = len(new_candles_combo) - 1
-    last_candle = new_candles_combo[last_candle_index]
-    buy_price = wallet.wallet_get_coin(coin).get('last_price')
-
-    if last_candle.end < buy_price * 0.98:
-        return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-
-    if last_candle.direction == 1:
-        wallet.list_wallet_coins.get(coin)['last_good_candle'] = last_candle
-
-    if last_candle.direction == -1:
-        last_good_candle = wallet.wallet_get_coin(coin).get('last_good_candle')
-        last_good_candle_size = last_good_candle.end - last_good_candle.start
-        max_fall = last_good_candle.end - last_good_candle_size * coef
-
-        if last_candle.end <= max_fall:
-            return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-
-    return 0
-
-
-def analyze_sell2(spot, client, wallet, coin, new_candles_combo, amount_falls, coef=1):
-    buy_price = wallet.wallet_get_coin(coin).get('last_price')
-    last_index = len(new_candles_combo) - 1
-    last_candle = new_candles_combo[last_index]
-
-    if new_candles_combo[last_index].end < buy_price * coef:
-        return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-
-    last_candles = []
-    while last_index >= last_index - amount_falls:
-        last_candles.append(new_candles_combo[last_index])
-
-    candles_directions = []
-    for candle in last_candles:
-        candles_directions.append(candle.direction)
-
-    try:
-        if candles_directions.index(1) != -1:
-            return 0
-    except:
-        return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-
-
-def analyze_sell3(spot, client, wallet, coin, new_candles_combo, coef=1):
-    buy_price = wallet.wallet_get_coin(coin).get('last_price')
-    buy_time = wallet.wallet_get_coin(coin).get('last_time')
-    last_index = len(new_candles_combo) - 1
-    last_candle = new_candles_combo[last_index]
-
-    if new_candles_combo[last_index].end < buy_price * coef:
-        return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-
-    if last_candle.time > buy_time * 1800000:
-        return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-
-    return 0
-
-
-def analyze_sell13(spot, client, wallet, coin, new_candles_combo, coef=1):
-    last_candle_index = len(new_candles_combo) - 1
-    last_candle = new_candles_combo[last_candle_index]
-    buy_price = wallet.wallet_get_coin(coin).get('last_price')
-    buy_time = wallet.wallet_get_coin(coin).get('last_time')
-
-    if last_candle.end < buy_price * coef:
-        return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-
-    if last_candle.time > buy_time * 1800000:
-        return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-
-    if last_candle.direction == -1:
-        prev_index = last_candle_index - 1
-        prev_direction = new_candles_combo[prev_index].direction
-
-        while prev_direction != 1:
-            prev_index -= 1
-            prev_direction = new_candles_combo[prev_index]
-
-        prev_candle = new_candles_combo[prev_index]
-        prev_size = prev_candle.end - prev_candle.start
-        max_fall = prev_candle.end - prev_size * coef
-
-        if last_candle.end <= max_fall:
-            return sell_coin(spot, client, wallet, coin, last_candle.end, 1)
-
-    return 0
-
 
 def analyze_sma0(spot, client, wallet, coin, new_candles_combo, is_buy, coef):
     sma_5 = find_sma(new_candles_combo, 5)
-    sma_15 = find_sma(new_candles_combo, 15)
+    sma_15 = find_sma(new_candles_combo, 21)
+    sma_45 = find_sma(new_candles_combo, 60)
+
     last_candle = new_candles_combo[len(new_candles_combo) - 1]
 
-    if (is_buy == True) & (sma_5 > sma_15):
-        return buy_coin(spot, client, wallet, coin, last_candle, 3, coef)
-    elif (is_buy == False) & (sma_5 < sma_15):
-        return sell_coin(spot, client, wallet, coin, last_candle.end, coef)
-
-    return 0
 
 
-def buy_coin(spot, client, wallet, coin, new_candle, pattern_used, coef=0., amount=0.):
+    #if (is_buy == True) & (sma_5 > sma_15) * (sma_15 > sma_45):
+    #    log = buy_coin(spot, client, wallet, coin, last_candle, coef)
+    #    return sma_5, sma_15, sma_45, log
+    #elif (is_buy == False) & (sma_5 < sma_15 * 1.0):
+    #    log = sell_coin(spot, client, wallet, coin, last_candle.end, coef)
+    #    return sma_5, sma_15, sma_45, log
+
+    return sma_5, sma_15, sma_45, 0
+
+
+def buy_coin(spot, client, wallet, coin, new_candle, coef=0., amount=0.):
     amount_main_coin = wallet.main_coin.get('amount')
     filters = wallet.list_wallet_coins.get(coin).get('filters')
 
@@ -375,36 +261,8 @@ def buy_coin(spot, client, wallet, coin, new_candle, pattern_used, coef=0., amou
     wallet.main_coin['amount'] -= amount_buy
     wallet.list_wallet_coins.get(coin)['amount'] += amount_buy / new_candle.end * 0.999
     wallet.list_wallet_coins.get(coin)['last_price'] = new_candle.end
-    wallet.list_wallet_coins.get(coin)['last_time'] = new_candle.time
-    wallet.list_wallet_coins.get(coin)['last_pattern'] = pattern_used
-    wallet.list_wallet_coins.get(coin)['last_good_candle'] = new_candle
 
     return 1
-
-    # last_trade = spot.my_trades(f"{coin}{wallet.main_coin.get('name')}", limit=1)[0]
-    # print(f"купил {coin} за {amount_buy}")
-    # print(f"{last_trade}\n")
-
-
-def analyze(spot, client, wallet, buy_patterns, new_candle_combo, coin):
-    coin_amount = wallet.list_wallet_coins.get(coin).get('amount')
-    main_coin_amount = wallet.main_coin.get('amount')
-
-    min_notional = float(wallet.list_wallet_coins.get(coin).get('filters').get('MIN_NOTIONAL').get('minNotional'))
-
-    last_index = len(new_candle_combo) - 1
-    last_candle = new_candle_combo[last_index]
-    if coin_amount * last_candle.end <= min_notional:
-        for pattern in buy_patterns:
-            if pattern.compare_candles_combo(new_candle_combo):
-                print(buy_patterns.index(pattern))
-                buy_coin(spot, client, wallet, coin, last_candle.end, 0.5)
-                return
-        return
-
-    if (wallet.wallet_get_coin(coin).get('last_price') * 1.02 <= last_candle.end) | \
-            (wallet.wallet_get_coin(coin).get('last_price') * 0.98 > last_candle.end):
-        sell_coin(spot, client, wallet, coin, last_candle.end, 1)
 
 
 def my_round(number, coef):
@@ -419,14 +277,14 @@ def my_round(number, coef):
 def find_sma(candles_combo, sma_coef):
     sma_coef -= 1
     last_index = len(candles_combo) - 1
-    if last_index < sma_coef:
+    if last_index < sma_coef - 1:
         print("Ошибка в функции find_sma 101")
         return 0
 
     start_index = last_index - sma_coef
 
     sum = 0
-    for index in range(start_index, last_index):
+    for index in range(start_index, last_index + 1):
         sum += candles_combo[index].end
 
     return sum / (sma_coef + 1)
@@ -437,15 +295,17 @@ def sma(candles_combo):
     start_index_5 = last_index - 4
 
     sum5 = 0
-    for index in range(start_index_5, last_index):
-        sum5 += candles_combo[index].end
+    for index in range(start_index_5, last_index + 1):
+        sum5 += candles_combo[index]
+        print(sum5)
     sum5 /= 5
 
     start_index_15 = last_index - 14
-
+    print()
     sum15 = 0
-    for index in range(start_index_15, last_index):
-        sum15 += candles_combo[index].end
+    for index in range(start_index_15, last_index + 1):
+        sum15 += candles_combo[index]
+        print(sum15)
     sum15 /= 15
 
     print(f"{sum5} < {sum15}")
